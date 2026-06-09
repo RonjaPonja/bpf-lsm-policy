@@ -27,30 +27,55 @@ struct {
 	__type(value, bool);
 } is_vm_owner SEC(".maps");
 
+/* Per-hook helpers operate on the slot pointer so each hook does at most
+ * one bpf_task_storage_get per task it touches. */
+static __always_inline bool *vm_owner_slot(struct task_struct *task, bool create)
+{
+	__u64 flags = create ? BPF_LOCAL_STORAGE_GET_F_CREATE : 0;
+	return bpf_task_storage_get(&is_vm_owner, task, 0, flags);
+}
+
+static __always_inline bool slot_is_owner(bool *slot)
+{
+	return slot && *slot;
+}
+
+/* Atomically claim the global count for this slot. -EPERM on contention. */
+static __always_inline int claim_vm_lock(bool *slot)
+{
+	if (__sync_val_compare_and_swap(&vm_owner_count, 0, 1))
+		return -EPERM;
+	*slot = true;
+	return 0;
+}
+
+/* Add an inherited reference for a freshly created child slot. */
+static __always_inline void inherit_vm_lock(bool *slot)
+{
+	*slot = true;
+	__sync_fetch_and_add(&vm_owner_count, 1);
+}
+
+/* Drop one owner reference; returns the new count. */
+static __always_inline __u64 release_vm_owner(bool *slot)
+{
+	*slot = false;
+	return __sync_sub_and_fetch(&vm_owner_count, 1);
+}
+
 /* The policy intercepts at various phases of the VM creation life-cycle.
  * It's expected that the system has some form of trusted execution
  * and can restrict the number of "VM launchers".
  */
 static __always_inline int try_acquire_vm_lock(void)
 {
-	struct task_struct *current = bpf_get_current_task_btf();
-	bool *task_is_vm_owner;
+	bool *slot = vm_owner_slot(bpf_get_current_task_btf(), true);
 
-	task_is_vm_owner = bpf_task_storage_get(&is_vm_owner, current, 0,
-						BPF_LOCAL_STORAGE_GET_F_CREATE);
-
-	if (!task_is_vm_owner)
+	if (!slot)
+		return -ENOMEM;
+	if (*slot)
 		return 0;
-
-	/* The task already grabbed the global lock earlier in its life-cycle */
-	if (*task_is_vm_owner)
-		return 0;
-
-	if (__sync_val_compare_and_swap(&vm_owner_count, 0, 1))
-		return -EPERM;
-
-	*task_is_vm_owner = true;
-	return 0;
+	return claim_vm_lock(slot);
 }
 
 /* For KVM accelerated VMs, there's a stronger guarantee that does
@@ -98,18 +123,18 @@ int BPF_PROG(restrict_qemu, struct linux_binprm *bprm)
 SEC("lsm/task_alloc")
 int BPF_PROG(vm_task_alloc, struct task_struct *task, unsigned long clone_flags)
 {
-	struct task_struct *parent = bpf_get_current_task_btf();
-	bool *is_parent_owner, *child_inherits;
+	bool *parent_slot = vm_owner_slot(bpf_get_current_task_btf(), false);
+	bool *child_slot;
 
-	is_parent_owner = bpf_task_storage_get(&is_vm_owner, parent, 0, 0);
-	if (is_parent_owner && *is_parent_owner) {
-		child_inherits = bpf_task_storage_get(
-			&is_vm_owner, task, 0, BPF_LOCAL_STORAGE_GET_F_CREATE);
-		if (child_inherits && !*child_inherits) {
-			*child_inherits = true;
-			__sync_fetch_and_add(&vm_owner_count, 1);
-		}
-	}
+	if (!slot_is_owner(parent_slot))
+		return 0;
+
+	child_slot = vm_owner_slot(task, true);
+	/* Defensive: skip if task_alloc somehow fires twice for this task. */
+	if (!child_slot || *child_slot)
+		return 0;
+
+	inherit_vm_lock(child_slot);
 	return 0;
 }
 
@@ -120,18 +145,11 @@ int BPF_PROG(vm_task_alloc, struct task_struct *task, unsigned long clone_flags)
 SEC("tp_btf/sched_process_exit")
 int BPF_PROG(release_vm_lock_on_exit, struct task_struct *task, bool group_dead)
 {
-	bool *owner = bpf_task_storage_get(&is_vm_owner, task, 0, 0);
+	bool *slot = vm_owner_slot(task, false);
 
-	if (owner && *owner) {
-		__u64 remaining = __sync_sub_and_fetch(&vm_owner_count, 1);
-
-		/* Mark settled so the task_free fallback below skips it. */
-		*owner = false;
-		if (remaining == 0)
-			bpf_printk(
-				"KVM_CREATE_VM: Lock released (last owner PID %d exited)\n",
-				task->pid);
-	}
+	if (slot_is_owner(slot) && release_vm_owner(slot) == 0)
+		bpf_printk("KVM_CREATE_VM: Lock released (last owner PID %d exited)\n",
+			   task->pid);
 	return 0;
 }
 
@@ -143,8 +161,8 @@ int BPF_PROG(release_vm_lock_on_exit, struct task_struct *task, bool group_dead)
 SEC("lsm/task_free")
 void BPF_PROG(release_vm_lock_on_free, struct task_struct *task)
 {
-	bool *owner = bpf_task_storage_get(&is_vm_owner, task, 0, 0);
+	bool *slot = vm_owner_slot(task, false);
 
-	if (owner && *owner)
-		__sync_sub_and_fetch(&vm_owner_count, 1);
+	if (slot_is_owner(slot))
+		release_vm_owner(slot);
 }
