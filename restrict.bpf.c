@@ -48,9 +48,24 @@ SEC("lsm/bpf")
 int BPF_PROG(restrict_bpf_load, int cmd, union bpf_attr *attr, unsigned int size)
 {
     if (cmd == BPF_PROG_LOAD) {
-        if (attr->prog_type == BPF_PROG_TYPE_LSM) 
+        if (attr->prog_type == BPF_PROG_TYPE_LSM)
             return BPF_LSM_DECISION(-EPERM, "bpf_lsm: Blocked loading of new LSM program\n");
     }
 
     return 0;
+}
+
+/* Unmounting the bpffs that holds our pinned LSM links tears down the
+ * inodes that keep those links alive, dropping the last reference and
+ * silently detaching the policy from the kernel's LSM hook chain. Block
+ * umount of any bpffs while the policy is loaded; the loader's own
+ * bpffs at /sys/fs/bpf is meant to be a permanent system filesystem.
+ */
+SEC("lsm/sb_umount")
+int BPF_PROG(restrict_bpffs_umount, struct vfsmount *mnt, int flags)
+{
+    if (BPF_CORE_READ(mnt, mnt_sb, s_magic) != BPF_FS_MAGIC)
+        return 0;
+
+    return BPF_LSM_DECISION(-EPERM, "bpf_lsm: intercepted umount of bpffs\n");
 }

@@ -26,3 +26,8 @@ jobs:
         uses: ./.github/actions/vm-command
         with:
           run: cd /host && BPF_LSM_POLICY_ENFORCE=1 ./tests/vm-lock-inherit-bypass.sh
+
+      - name: bpffs umount does not bypass the lockdown
+        uses: ./.github/actions/vm-command
+        with:
+          run: cd /host && BPF_LSM_POLICY_ENFORCE=1 ./tests/vm-umount-bypass.sh

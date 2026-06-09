@@ -129,6 +129,9 @@ static struct restrict_bpf *finalize_lsm_policy(void)
 	if (PIN_LINK(skel, restrict_inode_unlink))
 		goto cleanup;
 
+	if (PIN_LINK(skel, restrict_bpffs_umount))
+		goto cleanup;
+
 	skel->links.restrict_bpf_load =
 		bpf_program__attach(skel->progs.restrict_bpf_load);
 	if (!skel->links.restrict_bpf_load) {
@@ -146,6 +149,7 @@ static struct restrict_bpf *finalize_lsm_policy(void)
 
 cleanup:
 	UNPIN_LINK(skel, restrict_bpf_load);
+	UNPIN_LINK(skel, restrict_bpffs_umount);
 	UNPIN_LINK(skel, restrict_inode_unlink);
 	restrict_bpf__destroy(skel);
 	return NULL;

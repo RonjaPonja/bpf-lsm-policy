@@ -15,6 +15,7 @@ The project consists of a user-space loader and BPF programs that are attached t
     *   `release_vm_lock_on_free`: Attached to `lsm/task_free` as a fallback for the bad-fork path where `copy_process()` fails after `task_alloc` ran but before the task is ever scheduled, so `sched_process_exit` never fires.
 *   **`restrict.bpf.c`**: A BPF program designed to finalize the security policy and prevent tampering.
     *   `restrict_inode_unlink`: Attached to the `lsm/inode_unlink` hook, it prevents the unlinking (deletion) of pinned BPF LSM links from the bpffs filesystem. This makes the loaded LSM policies persistent until the next reboot.
+    *   `restrict_bpffs_umount`: Attached to the `lsm/sb_umount` hook, it blocks unmounting any bpffs while the policy is loaded. Without this, unmounting `/sys/fs/bpf` would tear down the inodes that hold our pinned links, dropping the last references and silently detaching the policy.
     *   `restrict_bpf_load`: Attached to the `lsm/bpf` hook, it prevents any new BPF programs of type `BPF_PROG_TYPE_LSM` from being loaded, effectively locking the LSM policy.
 *   **`bpf_lsm_policy_loader.service`**: A systemd service file to run the `bpf_lsm_policy_loader` at boot time, ensuring the policy is applied automatically.
 
