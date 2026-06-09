@@ -41,18 +41,25 @@ fi
 log_success "umount of /sys/fs/bpf was blocked (exit $RC)"
 
 log_info "Probe 2: confirm BPF_PROG_LOAD type=lsm is still denied"
-# vmlinux.h is produced by `make` in the source tree; regenerate on demand
-# in case a prior test's cleanup wiped it.
-(cd /host && make vmlinux.h >/dev/null 2>&1)
 cat >"$PROBE_SRC" <<'EOF'
-#include "vmlinux.h"
+#include <linux/types.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
+
+/* Opaque -- we only need the argument shape for the lsm/file_open
+ * hook signature, never deref. */
+struct file;
+
 char LICENSE[] SEC("license") = "GPL";
+
 SEC("lsm/file_open")
 int BPF_PROG(probe_lsm, struct file *file) { return 0; }
 EOF
-clang -g -O2 -target bpf -D__TARGET_ARCH_x86_64 -I/host \
+# Same -idirafter dance as Makefile so <asm/types.h> resolves under
+# the BPF target's restricted include search.
+CLANG_SYS_INCLUDES=$(clang -v -E - </dev/null 2>&1 \
+	| sed -n '/<...> search starts here:/,/End of search list./{ s| \(/.*\)|-idirafter \1|p }')
+clang -g -O2 -target bpf -D__TARGET_ARCH_x86_64 $CLANG_SYS_INCLUDES \
 	-c "$PROBE_SRC" -o "$PROBE_OBJ"
 
 rm -f /tmp/lsm-probe-pin

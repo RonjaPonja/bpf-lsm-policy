@@ -1,8 +1,10 @@
-#include "vmlinux.h"
+#include <linux/bpf.h>
+#include <linux/errno.h>
+#include <stdbool.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 #include <bpf/bpf_core_read.h>
-#include <errno.h>
+#include "kernel_types.bpf.h"
 #include "bpf_lsm_policy.h"
 
 #define BPF_FS_MAGIC 0xCAFE4A11

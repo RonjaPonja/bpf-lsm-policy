@@ -66,17 +66,9 @@ make
 
 This will compile the BPF programs, generate the BPF skeletons, and build the `bpf_lsm_policy_loader` executable.
 
-### Building with a specific kernel
+### Kernel types
 
-By default, the build process uses the BTF (BPF Type Format) information from the running kernel, located at `/sys/kernel/btf/vmlinux`. However, if you are building the BPF programs on a kernel that is different from the target kernel, or if the running kernel is missing some required structs or fields, you may need to provide the BTF information from a different kernel.
-
-This can be done by specifying the `BTF_VMLINUX` variable when running `make`:
-
-```bash
-make BTF_VMLINUX=/path/to/your/vmlinux
-```
-
-This is only required if the kernel that the BPF program is being built on does not have some fields or structs at all.
+The BPF programs declare only the kernel fields they touch in `kernel_types.bpf.h`, using `__attribute__((preserve_access_index))`. libbpf rewrites the offsets at load time against the running kernel's BTF (CO-RE), so the build does not need a `vmlinux.h` dump and runs against any kernel that exposes BTF for the structs we use (task_struct, file, inode, dentry, super_block, vfsmount, linux_binprm, bpf_link, bpf_prog).
 
 ### Installation and Activation
 

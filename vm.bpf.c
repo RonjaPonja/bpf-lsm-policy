@@ -1,9 +1,10 @@
-#include "vmlinux.h"
+#include <linux/bpf.h>
+#include <linux/errno.h>
+#include <stdbool.h>
 #include <bpf/bpf_core_read.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
-#include <linux/errno.h>
-#include <stdbool.h>
+#include "kernel_types.bpf.h"
 #include "bpf_lsm_policy.h"
 
 char LICENSE[] SEC("license") = "GPL";
@@ -14,7 +15,7 @@ char LICENSE[] SEC("license") = "GPL";
  * "free" only when the count is 0; a binary flag would let an inherited child
  * release the lock for the still-running root acquirer.
  */
-uint64_t vm_owner_count = 0;
+__u64 vm_owner_count = 0;
 /* Can be extended / generalized if there are more emulators
  * installed.
  */
@@ -105,7 +106,7 @@ int BPF_PROG(restrict_kvm_create, struct file *file, unsigned int cmd,
 SEC("lsm/bprm_check_security")
 int BPF_PROG(restrict_qemu, struct linux_binprm *bprm)
 {
-	uint64_t ino = bprm->file->f_inode->i_ino;
+	__u64 ino = bprm->file->f_inode->i_ino;
 	int err;
 
 	if (qemu_inode == 0 || ino != qemu_inode)

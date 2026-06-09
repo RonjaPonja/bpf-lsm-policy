@@ -2,7 +2,6 @@
 CLANG ?= clang
 BPFTOOL ?= bpftool
 ARCH := x86_64
-BTF_VMLINUX ?= /sys/kernel/btf/vmlinux
 
 # List all your BPF source files here
 BPF_SRCS := vm.bpf.c restrict.bpf.c
@@ -33,17 +32,7 @@ BPF_CFLAGS := -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) -D__x86_64__ $(CLANG_BP
 
 all: $(LOADER_BIN)
 
-vmlinux.h:
-	@if [ -f "$(BTF_VMLINUX)" ]; then \
-		echo "Generating vmlinux.h from $(BTF_VMLINUX)..."; \
-		$(BPFTOOL) btf dump file $(BTF_VMLINUX) format c > vmlinux.h; \
-	else \
-		echo "ERROR: BTF file $(BTF_VMLINUX) not found."; \
-		echo "You can specify the path with 'make BTF_VMLINUX=/path/to/vmlinux'"; \
-		exit 1; \
-	fi
-
-%.bpf.o: %.bpf.c vmlinux.h
+%.bpf.o: %.bpf.c kernel_types.bpf.h bpf_lsm_policy.h
 	@echo "Compiling BPF object: $@"
 	$(CLANG) $(BPF_CFLAGS) -I. -c $< -o $@
 
@@ -56,7 +45,7 @@ $(LOADER_BIN): $(LOADER_SRC) $(BPF_SKELS)
 	$(CLANG) $(CFLAGS) -I. $(LOADER_SRC) -o $(LOADER_BIN) $(LIBS)
 
 clean:
-	rm -f $(BPF_OBJS) $(BPF_SKELS) $(LOADER_BIN) vmlinux.h
+	rm -f $(BPF_OBJS) $(BPF_SKELS) $(LOADER_BIN)
 
 install: $(LOADER_BIN)
 	@echo "Installing binary to $(DESTDIR)$(BINDIR)..."

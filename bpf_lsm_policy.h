@@ -3,7 +3,7 @@
 
 #ifdef __BPF__
 
-#include "vmlinux.h"
+#include <linux/types.h>
 #include <bpf/bpf_helpers.h>
 
 /* The BPF-side only variable (set by loader) */
