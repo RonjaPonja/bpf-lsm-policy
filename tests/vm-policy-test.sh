@@ -28,6 +28,9 @@ trap cleanup EXIT SIGINT SIGTERM
 
 make
 make install
+# Push the requested mode into systemd's environment so the systemd-managed
+# loader picks it up via PassEnvironment=BPF_LSM_POLICY_ENFORCE.
+systemctl set-environment BPF_LSM_POLICY_ENFORCE="${BPF_LSM_POLICY_ENFORCE:-0}"
 make load
 
 if [ ! -f "$KERNEL_FILE" ]; then

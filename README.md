@@ -10,8 +10,9 @@ The project consists of a user-space loader and BPF programs that are attached t
 
 *   **`bpf_lsm_policy_loader`**: The user-space application responsible for loading, attaching, and pinning the BPF programs. It creates a directory at `/sys/fs/bpf/bpf_lsm_policy` where the BPF links are pinned.
 *   **`vm.bpf.c`**: A BPF program that enforces a system-wide lock on KVM virtual machine creation.
-    *   `restrict_kvm_create`: Attached to the `lsm/file_ioctl` hook, it allows only one process to create a KVM VM. Once a process creates a VM, no other process can do so until the original process exits.
-    *   `release_vm_lock`: Attached to the `lsm/task_free` hook, it releases the VM lock when the process that acquired it exits.
+    *   `restrict_kvm_create`: Attached to the `lsm/file_ioctl` hook, it allows only one process to create a KVM VM. Once a process creates a VM, no other process can do so until the original process (and any children that inherited the owner flag) exit.
+    *   `release_vm_lock_on_exit`: Attached to the `tp_btf/sched_process_exit` tracepoint, it synchronously drops an owner reference from inside `do_exit()`. The LSM `task_free` hook would otherwise run from an RCU callback, briefly letting another process steal the lock between the real owner exiting and the policy noticing.
+    *   `release_vm_lock_on_free`: Attached to `lsm/task_free` as a fallback for the bad-fork path where `copy_process()` fails after `task_alloc` ran but before the task is ever scheduled, so `sched_process_exit` never fires.
 *   **`restrict.bpf.c`**: A BPF program designed to finalize the security policy and prevent tampering.
     *   `restrict_inode_unlink`: Attached to the `lsm/inode_unlink` hook, it prevents the unlinking (deletion) of pinned BPF LSM links from the bpffs filesystem. This makes the loaded LSM policies persistent until the next reboot.
     *   `restrict_bpf_load`: Attached to the `lsm/bpf` hook, it prevents any new BPF programs of type `BPF_PROG_TYPE_LSM` from being loaded, effectively locking the LSM policy.

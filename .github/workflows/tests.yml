@@ -20,4 +20,9 @@ jobs:
       - name: Only one VM on the system
         uses: ./.github/actions/vm-command
         with:
-          run: cd /host && ./tests/vm-policy-test.sh
+          run: cd /host && BPF_LSM_POLICY_ENFORCE=1 ./tests/vm-policy-test.sh
+
+      - name: Inherited-child release does not bypass the VM lock
+        uses: ./.github/actions/vm-command
+        with:
+          run: cd /host && BPF_LSM_POLICY_ENFORCE=1 ./tests/vm-lock-inherit-bypass.sh

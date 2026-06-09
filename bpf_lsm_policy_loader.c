@@ -75,7 +75,10 @@ static struct vm_bpf *vm_policy_init(void)
 	if (PIN_LINK(skel, restrict_kvm_create))
 		goto cleanup;
 
-	if (PIN_LINK(skel, release_vm_lock))
+	if (PIN_LINK(skel, release_vm_lock_on_exit))
+		goto cleanup;
+
+	if (PIN_LINK(skel, release_vm_lock_on_free))
 		goto cleanup;
 
 	if (PIN_LINK(skel, restrict_qemu))
@@ -88,7 +91,8 @@ static struct vm_bpf *vm_policy_init(void)
 
 cleanup:
 	UNPIN_LINK(skel, restrict_kvm_create);
-	UNPIN_LINK(skel, release_vm_lock);
+	UNPIN_LINK(skel, release_vm_lock_on_exit);
+	UNPIN_LINK(skel, release_vm_lock_on_free);
 	UNPIN_LINK(skel, restrict_qemu);
 	UNPIN_LINK(skel, vm_task_alloc);
 	vm_bpf__destroy(skel);
@@ -173,7 +177,8 @@ int main(int argc, char **argv)
 		fprintf(stderr,
 			"Fatal: LSM lockdown failed. Rolling back VM policies...\n");
 		UNPIN_LINK(vm_skel, restrict_kvm_create);
-		UNPIN_LINK(vm_skel, release_vm_lock);
+		UNPIN_LINK(vm_skel, release_vm_lock_on_exit);
+		UNPIN_LINK(vm_skel, release_vm_lock_on_free);
 		UNPIN_LINK(vm_skel, restrict_qemu);
 		UNPIN_LINK(vm_skel, vm_task_alloc);
 		vm_bpf__destroy(vm_skel);
