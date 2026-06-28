@@ -53,7 +53,8 @@ install: $(LOADER_BIN)
 	install -m 755 $(LOADER_BIN) $(DESTDIR)$(BINDIR)/$(LOADER_BIN)
 	@echo "Installing service to $(DESTDIR)$(UNITDIR)..."
 	install -d $(DESTDIR)$(UNITDIR)
-	install -m 644 $(SERVICE_FILE) $(DESTDIR)$(UNITDIR)/$(SERVICE_FILE)
+	sed 's|@BINDIR@|$(BINDIR)|g' $(SERVICE_FILE).in > $(DESTDIR)$(UNITDIR)/$(SERVICE_FILE)
+	chmod 644 $(DESTDIR)$(UNITDIR)/$(SERVICE_FILE)
 
 load: install
 	@echo "Reloading systemd and starting service..."

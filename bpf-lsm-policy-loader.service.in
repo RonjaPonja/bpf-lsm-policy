@@ -10,7 +10,7 @@ Type=oneshot
 RemainAfterExit=yes
 # Path to the installed binary
 PassEnvironment=BPF_LSM_POLICY_ENFORCE
-ExecStart=/usr/local/sbin/bpf_lsm_policy_loader
+ExecStart=@BINDIR@/bpf_lsm_policy_loader
 
 [Install]
 WantedBy=sysinit.target
