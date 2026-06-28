@@ -1,5 +1,6 @@
 # Variables
-CLANG ?= clang
+CC ?= clang
+BPFCC ?= $(CC)
 BPFTOOL ?= bpftool
 ARCH := x86_64
 
@@ -22,7 +23,7 @@ UNITDIR ?= /etc/systemd/system
 CFLAGS := -g -O2 -Wall
 LIBS := -lbpf
 
-CLANG_BPF_SYS_INCLUDES := $(shell $(CLANG) -v -E - </dev/null 2>&1 \
+CLANG_BPF_SYS_INCLUDES := $(shell $(CC) -v -E - </dev/null 2>&1 \
     | sed -n '/<...> search starts here:/,/End of search list./{ s| \(/.*\)|-idirafter \1|p }')
 
 
@@ -34,7 +35,7 @@ all: $(LOADER_BIN)
 
 %.bpf.o: %.bpf.c kernel_types.bpf.h bpf_lsm_policy.h
 	@echo "Compiling BPF object: $@"
-	$(CLANG) $(BPF_CFLAGS) -I. -c $< -o $@
+	$(BPFCC) $(BPF_CFLAGS) -I. -c $< -o $@
 
 %.skel.h: %.bpf.o
 	@echo "Generating skeleton: $@"
@@ -42,7 +43,7 @@ all: $(LOADER_BIN)
 
 $(LOADER_BIN): $(LOADER_SRC) $(BPF_SKELS)
 	@echo "Compiling loader..."
-	$(CLANG) $(CFLAGS) -I. $(LOADER_SRC) -o $(LOADER_BIN) $(LIBS)
+	$(CC) $(CFLAGS) -I. $(LOADER_SRC) -o $(LOADER_BIN) $(LIBS)
 
 clean:
 	rm -f $(BPF_OBJS) $(BPF_SKELS) $(LOADER_BIN)
