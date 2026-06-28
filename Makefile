@@ -13,7 +13,7 @@ BPF_SKELS := $(BPF_SRCS:.bpf.c=.skel.h)
 
 LOADER_SRC := bpf_lsm_policy_loader.c
 LOADER_BIN := bpf_lsm_policy_loader
-SERVICE_FILE := bpf_lsm_policy_loader.service
+SERVICE_FILE := bpf-lsm-policy-loader.service
 
 DESTDIR ?=
 BINDIR ?= /usr/local/sbin
