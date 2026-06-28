@@ -31,3 +31,51 @@ jobs:
         uses: ./.github/actions/vm-command
         with:
           run: cd /host && BPF_LSM_POLICY_ENFORCE=1 ./tests/vm-umount-bypass.sh
+
+  build-aarch64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install cross-compilation dependencies
+        run: |
+          sudo dpkg --add-architecture arm64
+
+          # Restrict default archive mirrors to amd64
+          sudo sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
+
+          # Add arm64 ports mirror
+          sudo bash -c 'cat <<EOF > /etc/apt/sources.list.d/ubuntu-arm64.sources
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports/
+          Suites: noble noble-updates noble-backports
+          Components: main restricted universe multiverse
+          Architectures: arm64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports/
+          Suites: noble-security
+          Components: main restricted universe multiverse
+          Architectures: arm64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF'
+
+          sudo apt-get update
+          sudo apt-get install -y linux-tools-common linux-tools-generic gcc-aarch64-linux-gnu clang llvm libbpf-dev:arm64 
+
+          BPFTOOL_BIN=(/usr/lib/linux-tools-*/bpftool)
+          echo "Found real bpftool at: ${BPFTOOL_BIN[0]}"
+
+          # bpftool is a virtual package provided by linux-tools-generic. However,
+          # that installs a bpftool wrapper which bails out if the installed package
+          # does not exactly match the running kernel, which is unlikely in CI images.
+          # We just want to do `gen skeleton`, where this doesn't matter anyway.
+          # Hence just force the non-wrapped bpftool here:
+          sudo ln -sf "${BPFTOOL_BIN[0]}" /usr/local/bin/bpftool
+          which bpftool
+          bpftool --version
+
+      - name: Build aarch64
+        run: make clean && make CC="clang --target=aarch64-linux-gnu" BPFCC=clang ARCH=aarch64

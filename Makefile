@@ -2,7 +2,7 @@
 CC ?= clang
 BPFCC ?= $(CC)
 BPFTOOL ?= bpftool
-ARCH := x86_64
+ARCH ?= $(shell uname -m)
 
 # List all your BPF source files here
 BPF_SRCS := vm.bpf.c restrict.bpf.c
@@ -26,8 +26,15 @@ LIBS := -lbpf
 CLANG_BPF_SYS_INCLUDES := $(shell $(CC) -v -E - </dev/null 2>&1 \
     | sed -n '/<...> search starts here:/,/End of search list./{ s| \(/.*\)|-idirafter \1|p }')
 
+ifeq ($(ARCH),aarch64)
+	BPF_ARCH_FLAGS := -D__TARGET_ARCH_arm64 -D__aarch64__
+else ifeq ($(ARCH),x86_64)
+	BPF_ARCH_FLAGS := -D__TARGET_ARCH_x86 -D__x86_64__
+else
+	BPF_ARCH_FLAGS := -D__TARGET_ARCH_$(ARCH)
+endif
 
-BPF_CFLAGS := -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) -D__x86_64__ $(CLANG_BPF_SYS_INCLUDES)
+BPF_CFLAGS := -g -O2 -target bpf $(BPF_ARCH_FLAGS) $(CLANG_BPF_SYS_INCLUDES)
 
 .PHONY: all clean install uninstall load
 
